@@ -24,54 +24,25 @@ Lenovo ThinkSystem SR950
 HPE DL360 Gen10   
 HPE DL560 Gen10
 
+## Build and run
+
+```
+docker run -d --restart=always -e USERNAME=redfish -e PASSWORD=xxxxxxxxx -p 9210:9210 quocbao747/redfish-exporter:1.0-beta
+```
+
+or just hit `docker compose build && docker compose up -d` with default parameter
+
 ## Example Call
 
-If you are logged into the POD running the exporter, you can call
-
 ```bash
-curl http://localhost:9200/redfish?target=server1.example.com&job=redfish-myjob
+curl http://<IP>:9200/redfish?target=server1.example.com
 ```
-
-## Prerequisites and Installation
-
-The exporter was written for Python 3.6 or newer. To install all modules needed you have to run the following command:
-
-```bash
-pip3 install --no-cache-dir -r requirements.txt
-```
-
-There is also a docker file available to create a docker container to run the exporter.
 
 ## Parameters
 
 `-l <logfile>` - all output is written to a logfile.
 
 `-d` - switches on debugging mode
-
-`-c <config file>` - you can specify the path to the config file, default is config.yml.
-
-## The config.yml file
-
-* The **listen_port** is providing the port on which the exporter is waiting to receive calls. It is overwritten by the environment variable **LISTEN_PORT**.
-
-* The credentials for login to the switches can either be added to the config.yaml file or passed via environment variables. The environment variables are taking precedence over the entries in config.yaml file.
-
-    The mapping of job names to environment variables follows a schema: `REDFISH_JOB1_USERNAME` and `REDFISH_JOB1_PASSWORD` would be the variables for example of the first job called `redfish/job1`.
-    A slash gets replaced by underscore and everything gets converted to uppercase.
-
-* The **timeout** parameter specifies the amount of time to wait for an answer from the server. Again this can alos be provided via TIMEOUT environment variable.
-
-* The **job** parameter specifies the Prometheus job that will be passed as label if no job was handed over during the API call.
-
-### Example of a config file
-
-```yaml
-listen_port: 9200
-username: <your username>
-password: <your password>
-timeout: 40
-job: 'redfish-myjob'
-```
 
 ## Exported Metrics
 
