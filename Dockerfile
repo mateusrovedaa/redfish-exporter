@@ -1,33 +1,17 @@
-FROM keppel.eu-de-1.cloud.sap/ccloud-dockerhub-mirror/library/ubuntu:latest
+FROM python:3.10-alpine3.19
 
-RUN export DEBIAN_FRONTEND=noninteractive \
-    && apt-get update \
-    && apt-get upgrade -y \
-    && apt-get install -y python3 \
-    && apt-get install -y python3-pip \
-    && apt-get install -y curl \
-    && apt-get autoremove -y \
-    && apt-get clean -y \
-    && rm -rf /var/lib/apt/lists/*
+LABEL source_repository="https://github.com/baonq-me/redfish-exporter"
+LABEL maintainer="Quoc-Bao Nguyen <quocbao747@gmail.com>"
 
-ARG FOLDERNAME=redfish_exporter
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-RUN mkdir /${FOLDERNAME}
-RUN mkdir /${FOLDERNAME}/collectors
+WORKDIR /app
 
-WORKDIR /${FOLDERNAME}
+COPY ./requirements.txt ./
+RUN pip install --no-cache-dir -r ./requirements.txt
 
-RUN pip3 install --break-system-packages --upgrade pip --ignore-install
-COPY requirements.txt /${FOLDERNAME}
-RUN pip3 install --break-system-packages --no-cache-dir -r requirements.txt
+ADD collectors /app/collectors
+COPY *.py /app
 
-COPY *.py /${FOLDERNAME}/
-COPY collectors/ /${FOLDERNAME}/collectors/
-COPY config.yml /${FOLDERNAME}/
-
-RUN curl -ks 'https://aia.pki.co.sap.com/aia/SAPNetCA_G2.crt' -o '/usr/lib/ssl/certs/SAPNetCA_G2.crt'
-RUN curl -ks 'https://cacerts.digicert.com/DigiCertGlobalRootG2.crt.pem' -o '/usr/lib/ssl/certs/DigiCertGlobalRootCA.crt'
-RUN /usr/sbin/update-ca-certificates
-
-LABEL source_repository="https://github.com/sapcc/redfish-exporter"
-LABEL maintainer="Bernd Kuespert <bernd.kuespert@sap.com>"
+CMD ["python3", "redfish-exporter.py"]

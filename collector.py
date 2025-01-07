@@ -9,7 +9,7 @@ from prometheus_client.core import GaugeMetricFamily
 from collectors.performance_collector import PerformanceCollector
 from collectors.firmware_collector import FirmwareCollector
 from collectors.health_collector import HealthCollector
-from collectors.certificate_collector import CertificateCollector
+
 
 class RedfishMetricsCollector:
     """Class for collecting Redfish metrics."""
@@ -211,7 +211,7 @@ class RedfishMetricsCollector:
 
         except requests.exceptions.HTTPError as err:
             self._last_http_code = err.response.status_code
-            if err.response.status_code == 401:
+            if err.response.status_code == 401 or err.response.status_code == 403:
                 logging.error(
                     "Target %s: Authorization Error: "
                     "Wrong job provided or user/password set wrong on server %s: %s",
@@ -251,18 +251,11 @@ class RedfishMetricsCollector:
             # if the request fails the server might give a hint in the ExtendedInfo field
             else:
                 if req_text:
-                    logging.debug(
-                        "Target %s: %s: %s",
-                        self.target,
-                        req_text['error']['code'],
-                        req_text['error']['message']
-                    )
-
                     if "@Message.ExtendedInfo" in req_text['error']:
 
                         if isinstance(req_text['error']['@Message.ExtendedInfo'], list):
                             if "Message" in req_text['error']['@Message.ExtendedInfo'][0]:
-                                logging.debug(
+                                logging.error(
                                     "Target %s: %s",
                                     self.target,
                                     req_text['error']['@Message.ExtendedInfo'][0]['Message']
@@ -271,13 +264,18 @@ class RedfishMetricsCollector:
                         elif isinstance(req_text['error']['@Message.ExtendedInfo'], dict):
 
                             if "Message" in req_text['error']['@Message.ExtendedInfo']:
-                                logging.debug(
+                                logging.error(
                                     "Target %s: %s",
                                     self.target,
                                     req_text['error']['@Message.ExtendedInfo']['Message']
                                 )
                         else:
-                            pass
+                            logging.error(
+                                "Target %s: %s: %s",
+                                self.target,
+                                req_text['error']['code'],
+                                req_text['error'].get('message', '')
+                            )
 
         request_duration = round(time.time() - request_start, 2)
         logging.debug("Target %s: Request duration: %s", self.target, request_duration)
@@ -397,14 +395,6 @@ class RedfishMetricsCollector:
         self.get_base_labels()
 
         if self.metrics_type == 'health':
-
-            cert_metrics = CertificateCollector(self.host, self.target, self.labels)
-            cert_metrics.collect()
-
-            yield cert_metrics.cert_metrics_isvalid
-            yield cert_metrics.cert_metrics_valid_hostname
-            yield cert_metrics.cert_metrics_valid_days
-            yield cert_metrics.cert_metrics_selfsigned
 
             powerstate_metrics = GaugeMetricFamily(
                 "redfish_powerstate",

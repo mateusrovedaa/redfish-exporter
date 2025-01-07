@@ -4,6 +4,7 @@ import math
 
 from prometheus_client.core import GaugeMetricFamily
 
+
 class HealthCollector():
     """Collects health information from the Redfish API."""
     def __enter__(self):
@@ -158,7 +159,7 @@ class HealthCollector():
             "device_type": "storage",
             "device_name": controller_name,
             "device_manufacturer": controller_details.get("Manufacturer", "unknown"),
-            "controller_model": controller_details.get("Model", "unknown"),
+            "controller_model": controller_details.get("Model", "unknown").replace("  ", " "),
         }
         labels.update(self.col.labels)
         return labels
@@ -376,7 +377,7 @@ class HealthCollector():
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_tb is not None:
             logging.exception(
-                "Target %s: An exception occured in %s:%s",
+                "Target %s: An exception occurred in %s:%s",
                 self.col.target,
                 exc_tb.tb_frame.f_code.co_filename,
                 exc_tb.tb_lineno
