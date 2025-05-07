@@ -1,0 +1,13 @@
+services:
+  redfish-exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+    - .env
+    image: redfish-exporter:1.0
+    container_name: redfish-exporter
+    restart: always
+    network_mode: "host"
+    ports:
+      - "9120:9120"
