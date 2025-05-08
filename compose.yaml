@@ -8,6 +8,6 @@ services:
     image: redfish-exporter:1.0
     container_name: redfish-exporter
     restart: always
-    network_mode: "host"
+      #network_mode: "host" # Only needed in local environment
     ports:
       - "9120:9120"
