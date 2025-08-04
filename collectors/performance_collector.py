@@ -2,6 +2,7 @@
 import logging
 import math
 from prometheus_client.core import GaugeMetricFamily
+from typing import Any, List, Optional
 
 class PerformanceCollector:
     """Collects performance information from the Redfish API."""
@@ -27,6 +28,17 @@ class PerformanceCollector:
             "Redfish Server Monitoring Temperature Data",
             labels=self.col.labels,
             unit="Celsius"
+        )
+        self.fan_speed_metrics = GaugeMetricFamily(
+            "redfish_fan_speed_rpm",
+            "Average rotational speed of all system fans (RPM)",
+            labels=self.col.labels,
+        )
+        self.fan_pwm_metrics = GaugeMetricFamily(
+            "redfish_fan_speed_pwm_percent",
+            "Average duty‑cycle of all system fans (percent PWM)",
+            labels=self.col.labels,
+            unit="percent",
         )
         self.target = None
 
@@ -232,11 +244,101 @@ class PerformanceCollector:
                     "redfish_temperature", value=thermal_metric_value, labels=current_labels
                 )
 
+    def _rpm_from_fan(self, fan_obj: dict) -> Optional[float]:
+        """Return a numeric RPM reading from a Redfish Fan object, if any."""
+        if not fan_obj:
+            return None
+        if fan_obj.get("ReadingUnits") == "RPM" and fan_obj.get("Reading") is not None:
+            return fan_obj["Reading"]
+        if fan_obj.get("ReadingRPM") is not None:
+            return fan_obj["ReadingRPM"]
+        return None
+
+
+    def _pwm_from_fan(self, fan_obj: dict) -> Optional[float]:
+        if not fan_obj:
+            return None
+
+        value = None
+
+        if fan_obj.get("ReadingUnits") in {"Percent", "%"} and fan_obj.get("Reading") is not None:
+            value = fan_obj["Reading"]
+
+        for key in ("DutyCyclePercent", "ReadingPercent"):
+            if value is None and fan_obj.get(key) is not None:
+                value = fan_obj[key]
+
+        if value is None:
+            value = fan_obj.get("Oem", {}).get("Dell", {}).get("FanPWM")
+
+        try:
+            return float(value) if value is not None else None
+        except (ValueError, TypeError):
+            return None
+    
+
+    def get_fan_metrics(self) -> None:
+        """Gather average RPM and PWM for all fans."""
+        logging.info("Target %s: Gathering fan data …", self.col.target)
+        rpm_values: List[float] = []
+        pwm_values: List[float] = []
+
+        if self.col.urls.get("ThermalSubsystem"):
+            ts_data = self.col.connect_server(self.col.urls["ThermalSubsystem"])
+            fans_url = ts_data.get("Fans", {}).get("@odata.id")
+            if fans_url:
+                members = self.col.connect_server(fans_url).get("Members", [])
+                for member in members:
+                    fan_data = self.col.connect_server(member["@odata.id"])
+                    if (rpm := self._rpm_from_fan(fan_data)) is not None:
+                        rpm_values.append(rpm)
+                    if (pwm := self._pwm_from_fan(fan_data)) is not None:
+                        pwm_values.append(pwm)
+
+        if not rpm_values and self.col.urls.get("Thermal"):
+            thermal = self.col.connect_server(self.col.urls["Thermal"])
+            for fan in thermal.get("Fans", []):
+                if (rpm := self._rpm_from_fan(fan)) is not None:
+                    rpm_values.append(rpm)
+                if (pwm := self._pwm_from_fan(fan)) is not None:
+                    pwm_values.append(pwm)
+
+        labels = {"type": "average"}
+        labels.update(self.col.labels)
+
+        if rpm_values:
+            avg_rpm = sum(rpm_values) / len(rpm_values)
+            self.fan_speed_metrics.add_sample(
+                "redfish_fan_speed_rpm", value=avg_rpm, labels=labels
+            )
+        else:
+            logging.warning(
+                "Target %s, Host %s, Model %s: No fan RPM data found.",
+                self.col.target,
+                self.col.host,
+                self.col.model,
+            )
+
+        if pwm_values:
+            avg_pwm = sum(pwm_values) / len(pwm_values)
+            self.fan_pwm_metrics.add_sample(
+                "redfish_fan_speed_pwm_percent", value=avg_pwm, labels=labels
+            )
+        else:
+            logging.warning(
+                "Target %s, Host %s, Model %s: No fan PWM data found.",
+                self.col.target,
+                self.col.host,
+                self.col.model,
+            )
+            
+
     def collect(self):
         """Collects performance information from the Redfish API."""
         logging.info("Target %s: Collecting performance data ...",self.col.target)
         self.get_power_metrics()
         self.get_temp_metrics()
+        self.get_fan_metrics()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_tb is not None:

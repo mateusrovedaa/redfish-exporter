@@ -427,6 +427,8 @@ class RedfishMetricsCollector:
 
             yield metrics.power_metrics
             yield metrics.temperature_metrics
+            yield metrics.fan_speed_metrics   
+            yield metrics.fan_pwm_metrics
 
         # Finish with calculating the scrape duration
         duration = round(time.time() - self._start_time, 2)
